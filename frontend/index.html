@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distributed Live Chat</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h2>Topic A: Distributed Chat System</h2>
+    <div class="metrics-panel">
+        <button onclick="checkMetrics()">Check Gateway Metrics</button>
+        <button onclick="runBenchmark()">Run Worker CPU Benchmark</button>
+        <div id="metrics-result"></div>
+    </div>
+    <div>
+        <input type="text" id="username" placeholder="Enter your name..." />
+    </div>
+    <div id="chat"></div>
+    <div>
+        <input type="text" id="message" placeholder="Type a message here..." onkeypress="handleKeyPress(event)" />
+        <button onclick="sendMessage()">Send</button>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
