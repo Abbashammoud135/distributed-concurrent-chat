@@ -9,12 +9,19 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final GatewayService gatewayService;
-    public final ConcurrentHashMap<String, WebSocketSession> activeSessions = new ConcurrentHashMap<>();
+    // Store session wrappers instead of raw sessions
+    public final ConcurrentHashMap<String, BoundedSession> activeSessions = new ConcurrentHashMap<>();
 
-    public ChatWebSocketHandler(GatewayService gatewayService) { this.gatewayService = gatewayService; }
+    public ChatWebSocketHandler(GatewayService gatewayService) {
+        this.gatewayService = gatewayService;
+    }
 
     @Override
-    public void afterConnectionEstablished(WebSocketSession session) { activeSessions.put(session.getId(), session); }
+    public void afterConnectionEstablished(WebSocketSession session) {
+        // Wrap the session in a BoundedSession with a capacity of 50 messages
+        BoundedSession boundedSession = new BoundedSession(session, gatewayService.getSenderExecutor(), 50);
+        activeSessions.put(session.getId(), boundedSession);
+    }
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
@@ -22,5 +29,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     @Override
-    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) { activeSessions.remove(session.getId()); }
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+        activeSessions.remove(session.getId());
+    }
 }

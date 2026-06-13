@@ -21,14 +21,48 @@ graph TD
 
 ---
 
-## 🛠️ Key Architectural Patterns
+## 🛠️ Key Architectural Patterns & Concurrency Design (Project A)
 
-* **Distributed Network Boundary:** The Gateway communicates with the Worker via Java 21's modern non-blocking `HttpClient` REST calls.
-* **Bounded Resources & Backpressure:** The Gateway limits concurrency via an explicit `ThreadPoolExecutor` (Core: 10, Max: 50, Queue: 100). If the queue is saturated, it invokes `AbortPolicy` which drops the incoming message immediately, increasing the `droppedRequests` metric to protect the system from resource exhaustion.
-* **Async Pipeline & Timeouts:** Gateway-to-Worker communication is handled using an asynchronous chain (`CompletableFuture`). A timeout of **3 seconds** is enforced using `.orTimeout()`.
-* **Graceful Degradation (Fallback):** If the Worker times out or goes offline, the Gateway catches the exception and broadcasts a system alert fallback message to the chat instead of failing or throwing an unhandled exception.
-* **Graceful Shutdown:** The Gateway's thread pool initiates orderly termination via `@PreDestroy` when shutting down, allowing running jobs to complete within 5 seconds before forcing termination.
+* **Distributed Network Boundary:** The Gateway communicates with the Worker via Java 21's modern `HttpClient` synchronous REST calls isolated inside per-channel executors.
+* **Bounded Resources & Input Backpressure:** The Gateway limits concurrency via an explicit processing `ThreadPoolExecutor` (Core: 10, Max: 50, Queue: 100). If the queue is saturated, it invokes `AbortPolicy` which drops the incoming message immediately, increasing the `droppedRequests` metric to protect the system from resource exhaustion.
+* **Per-Channel Message Ordering:** Spawns a dedicated single-threaded executor for each channel (e.g. `#general`, `#random`, `#support`). Messages on a channel are processed sequentially, ensuring strict FIFO ordering within that channel without needing one global lock.
+* **Slow-Client Backpressure:** Wrapped WebSocket sessions in a custom `BoundedSession` containing a bounded queue (`ArrayBlockingQueue` of capacity 50). Outbound messages are sent asynchronously via a dedicated `senderExecutor`. If a client is slow and its queue overflows, messages are dropped for that client (`droppedBySlowClient` telemetry is incremented), ensuring slow clients do not block fast clients or exhaust heap memory.
+* **Network Boundary Timeout & Recovery:** Gateway-to-Worker communication enforces a strict **3-second** request timeout.
+* **Graceful Degradation (Fallback):** If the Worker times out or goes offline, the Gateway catches the exception and broadcasts a system alert fallback message to the channel instead of failing or crashing.
+* **Graceful Shutdown:** Initiates orderly termination via `@PreDestroy` when shutting down, allowing running jobs across all executors to complete within 5 seconds before forcing termination.
 * **CPU-Bound Benchmark:** Endpoint to compare sequential and parallel computation speeds over 5,000,000 random floating-point operations.
+
+---
+
+## 📊 Concurrency Scorecard
+
+| Question | Mechanism Used | Evidence |
+| :--- | :--- | :--- |
+| **Thread-safe?** | Thread-safe collections (`ConcurrentHashMap`), atomic primitives (`AtomicLong`, `AtomicBoolean`), and single-threaded channel workers. | Zero locks are used for message routing. Active WebSocket sessions are stored in a `ConcurrentHashMap` inside [ChatWebSocketHandler.java](file:///c:/Users/User/OneDrive/Desktop/4th%20year/Semester%208/Concurrent%20Programming/distributed-concurrent-chat/gateway-service/src/main/java/com/chat/gateway/websocket/ChatWebSocketHandler.java). |
+| **Visibility guaranteed?** | Java `volatile` reads/writes under atomic primitives, thread-safe queues (`LinkedBlockingQueue`, `ArrayBlockingQueue`), and safe publication patterns. | Thread state handoffs occur via Java concurrency libraries ensuring a happens-before memory visibility boundary between thread pools. |
+| **Deadlock-free?** | Thread pools run fully independently, avoiding any nested locks or cyclic synchronization waits. | No locks are acquired during HTTP calls or message broadcasting. Workers run sequentially without locking. |
+| **Liveness guaranteed?** | Tasks do not block each other across channels; slow clients do not block fast clients. | Dedicated single-threaded executors are spawned dynamically per channel. Messages on `#random` flow instantly even if `#general` is locked/blocking. |
+| **Bounded resources?** | Bounded thread pools, bounded worker queues, and client-specific outbound message queues. | Input gateway pool is sized Core 10 / Max 50 with a queue limit of 100. Each `BoundedSession` socket queue is limited to 50 items. |
+| **Failure recovery path?** | Custom 3-second HTTP timeouts and connection failure exceptions catch blocks returning system broadcast alerts. | Handled via [GatewayService.java](file:///c:/Users/User/OneDrive/Desktop/4th%20year/Semester%208/Concurrent%20Programming/distributed-concurrent-chat/gateway-service/src/main/java/com/chat/gateway/service/GatewayService.java) request timeouts, which route a fallback alert message to clients without crashing the worker threads. |
+
+---
+
+## ⚙️ Executor Sizing & Thread Pool Rationale
+
+### 1. Gateway Processing Pool (`executor`)
+* **Type:** `ThreadPoolExecutor`
+* **Configuration:** Core size: `10`, Max size: `50`, Bounded Queue: `LinkedBlockingQueue(100)`
+* **Sizing Rationale:** Since the gateway's primary job is receiving JSON frames, submitting task routing, and handling HTTP network dispatching, tasks are highly I/O bound. Sizing the core to `10` allows handling initial traffic bursts instantly, while letting it scale to `50` concurrent execution threads under heavy concurrent load. A bounded queue size of `100` prevents heap saturation.
+
+### 2. Slow-Client Sender Pool (`senderExecutor`)
+* **Type:** `ThreadPoolExecutor`
+* **Configuration:** Core size: `10`, Max size: `30`, Bounded Queue: `LinkedBlockingQueue(500)`
+* **Sizing Rationale:** This pool manages outbound `session.sendMessage` writes. Since client sockets are I/O bound and potentially slow, this pool is isolated from the main message processing pool. If a client goes offline or lags, its outbound writes can temporarily block one of these threads. The caller-runs policy ensures that if the pool is saturated, the scheduling thread helps push writes, enforcing native backpressure up the stack.
+
+### 3. Channel Processing Workers (`channelExecutors`)
+* **Type:** Striped Single-Threaded Executors (`Executors.newSingleThreadExecutor`)
+* **Configuration:** 1 thread per active chat channel (e.g. `#general`, `#random`, `#support`)
+* **Sizing Rationale:** The core Project A requirement states that per-channel message ordering must be strictly preserved without using a global lock. By mapping each channel to its own single-threaded worker executor, messages sent to that channel are processed in absolute FIFO order. Because different channels use distinct threads, there is no cross-channel blocking.
 
 ---
 

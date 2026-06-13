@@ -1,9 +1,17 @@
 let socket;
 let autoRefreshInterval = null;
+let currentChannel = '#general';
 
 const chatBox = document.getElementById('chat');
 const usernameInput = document.getElementById('username');
 const messageInput = document.getElementById('message');
+
+// Maintain client-side message histories per channel
+const messageHistory = {
+    '#general': [],
+    '#random': [],
+    '#support': []
+};
 
 function formatTime() {
     const now = new Date();
@@ -53,24 +61,78 @@ function connectWebSocket() {
     };
 }
 
+function switchChannel(channel) {
+    if (channel === currentChannel) return;
+    currentChannel = channel;
+    
+    // Update active channel tab UI
+    const buttons = document.querySelectorAll('.btn-channel');
+    buttons.forEach(btn => {
+        if (btn.innerText.trim() === channel) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    // Clear chat display area
+    chatBox.innerHTML = '';
+
+    // Append system welcome text
+    appendSystemMessage(`Joined channel ${channel}`, "info");
+
+    // Render historical messages for the switched channel
+    if (messageHistory[channel]) {
+        messageHistory[channel].forEach(msg => {
+            renderMessage(msg.sender, msg.text);
+        });
+    }
+}
+
 function appendMessage(rawData) {
-    // Check if it is a system alert fallback from Gateway
-    if (rawData.startsWith("[System Alert]")) {
-        appendSystemMessage(rawData, "error");
+    let channel = '#general';
+    let sender = 'System';
+    let text = rawData;
+
+    try {
+        const data = JSON.parse(rawData);
+        channel = data.channel || '#general';
+        sender = data.sender || 'System';
+        text = data.text || '';
+    } catch (e) {
+        // Fallback for raw legacy messages
+        if (rawData.startsWith("[System Alert]")) {
+            sender = 'System';
+            text = rawData;
+        } else {
+            const match = rawData.match(/^([^:]+):\s*(.*)$/);
+            if (match) {
+                sender = match[1].trim();
+                text = match[2].trim();
+            }
+        }
+    }
+
+    // Save to client history for switching tabs
+    if (messageHistory[channel]) {
+        messageHistory[channel].push({ sender, text });
+    }
+
+    // Render only if it matches current active channel view
+    if (channel === currentChannel) {
+        renderMessage(sender, text);
+    }
+}
+
+function renderMessage(sender, text) {
+    if (sender === 'System' || sender === 'system') {
+        const isErrorAlert = text.includes('[System Alert]');
+        appendSystemMessage(text, isErrorAlert ? 'error' : 'info');
         return;
     }
 
-    // Parse out "Name: Message" format
-    const match = rawData.match(/^([^:]+):\s*(.*)$/);
-    if (!match) {
-        // Fallback for simple strings
-        appendSystemMessage(rawData, "info");
-        return;
-    }
-
-    let sender = match[1].trim();
-    let messageBody = match[2].trim();
     let isProcessed = false;
+    let messageBody = text;
 
     // Check if worker processed badge is present
     if (messageBody.endsWith("[Processed by Worker]")) {
@@ -133,7 +195,13 @@ function sendMessage() {
     const user = usernameInput.value.trim() || "Anonymous";
     const msg = messageInput.value.trim();
     if (msg !== "" && socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(`${user}: ${msg}`);
+        // Send as a structured JSON object
+        const payload = JSON.stringify({
+            channel: currentChannel,
+            sender: user,
+            text: msg
+        });
+        socket.send(payload);
         messageInput.value = '';
     } else if (!socket || socket.readyState !== WebSocket.OPEN) {
         appendSystemMessage("Cannot send message: WebSocket connection is offline.", "error");
@@ -150,10 +218,12 @@ async function checkMetrics() {
     const metricProcessed = document.getElementById('metric-processed');
     const metricLatency = document.getElementById('metric-latency');
     const metricDropped = document.getElementById('metric-dropped');
+    const metricSlowDropped = document.getElementById('metric-slow-dropped');
     const metricFailed = document.getElementById('metric-failed');
     
     const cardActive = document.getElementById('card-active-clients');
     const cardDropped = document.getElementById('card-dropped');
+    const cardSlowDropped = document.getElementById('card-slow-dropped');
     const cardFailed = document.getElementById('card-failed');
 
     try {
@@ -186,6 +256,14 @@ async function checkMetrics() {
             cardDropped.classList.remove('active');
         }
 
+        const slowDroppedCount = data.droppedBySlowClient || 0;
+        metricSlowDropped.innerText = slowDroppedCount;
+        if (slowDroppedCount > 0) {
+            cardSlowDropped.classList.add('active');
+        } else {
+            cardSlowDropped.classList.remove('active');
+        }
+
         const failedCount = data.failedTimeouts || 0;
         metricFailed.innerText = failedCount;
         if (failedCount > 0) {
@@ -200,9 +278,11 @@ async function checkMetrics() {
         metricProcessed.innerText = "-";
         metricLatency.innerHTML = `-<span class="unit">ms</span>`;
         metricDropped.innerText = "-";
+        metricSlowDropped.innerText = "-";
         metricFailed.innerText = "-";
         cardActive.classList.remove('active-users-glow');
         cardDropped.classList.remove('active');
+        cardSlowDropped.classList.remove('active');
         cardFailed.classList.remove('active');
     }
 }
@@ -306,6 +386,9 @@ window.onload = function() {
         document.querySelector('.theme-icon-dark').style.display = 'none';
         document.querySelector('.theme-icon-light').style.display = 'inline-block';
     }
+    
+    // Add channel message histories initial state
+    appendSystemMessage("Joined channel #general", "info");
     
     connectWebSocket();
 };

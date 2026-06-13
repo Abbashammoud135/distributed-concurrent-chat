@@ -24,6 +24,7 @@ public class MetricsController {
             "activeWebSocketClients", wsHandler.activeSessions.size(),
             "totalRequestsProcessed", reqs,
             "droppedByBackpressure", gatewayService.droppedRequests.get(),
+            "droppedBySlowClient", gatewayService.droppedBySlowClient.get(),
             "failedTimeouts", gatewayService.failedRequests.get(),
             "averageLatencyMs", avgLatency
         );

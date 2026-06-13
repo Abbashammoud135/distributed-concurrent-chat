@@ -54,6 +54,22 @@
                 </div>
             </section>
 
+            <!-- Chat Channels Card -->
+            <section class="panel channels-panel">
+                <div class="panel-header">
+                    <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+                        <line x1="4" y1="22" x2="4" y2="15"></line>
+                    </svg>
+                    <h2>Chat Channels</h2>
+                </div>
+                <div class="channel-list" id="channel-list">
+                    <button class="btn btn-channel active" onclick="switchChannel('#general')">#general</button>
+                    <button class="btn btn-channel" onclick="switchChannel('#random')">#random</button>
+                    <button class="btn btn-channel" onclick="switchChannel('#support')">#support</button>
+                </div>
+            </section>
+
             <!-- Telemetry Metrics Panel -->
             <section class="panel metrics-panel">
                 <div class="panel-header">
@@ -85,6 +101,11 @@
                     <div class="metric-card warning" id="card-dropped">
                         <div class="metric-value" id="metric-dropped">0</div>
                         <div class="metric-label">Dropped (Backpressure)</div>
+                    </div>
+                    <!-- Slow Client Drops -->
+                    <div class="metric-card warning" id="card-slow-dropped">
+                        <div class="metric-value" id="metric-slow-dropped">0</div>
+                        <div class="metric-label">Slow Client Drops</div>
                     </div>
                     <!-- Failed Timeouts -->
                     <div class="metric-card critical" id="card-failed">
