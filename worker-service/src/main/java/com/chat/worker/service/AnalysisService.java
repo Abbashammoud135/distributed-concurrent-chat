@@ -27,12 +27,15 @@ public class AnalysisService {
         for (int i = 0; i < 5000000; i++) data.add(Math.random());
 
         long startSeq = System.currentTimeMillis();
-        data.stream().map(Math::sqrt).map(Math::sin).count();
+        double seqSum = data.stream().map(Math::sqrt).map(Math::sin).mapToDouble(Double::doubleValue).sum();
         long seqTime = System.currentTimeMillis() - startSeq;
 
         long startPar = System.currentTimeMillis();
-        data.parallelStream().map(Math::sqrt).map(Math::sin).count();
+        double parSum = data.parallelStream().map(Math::sqrt).map(Math::sin).mapToDouble(Double::doubleValue).sum();
         long parTime = System.currentTimeMillis() - startPar;
+
+        // Print sums to prevent potential dead-code elimination by JVM compiler
+        System.out.println("Benchmark sums computed: seq=" + seqSum + ", par=" + parSum);
 
         return Map.of(
             "sequentialTimeMs", seqTime,

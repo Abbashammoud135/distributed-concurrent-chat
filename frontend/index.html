@@ -3,23 +3,213 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Distributed Live Chat</title>
+    <meta name="description" content="Distributed Live Chat System and Gateway Telemetry Dashboard - Real-time metrics and concurrent stream benchmarking.">
+    <title>Distributed Chat & Telemetry Dashboard</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h2>Topic A: Distributed Chat System</h2>
-    <div class="metrics-panel">
-        <button onclick="checkMetrics()">Check Gateway Metrics</button>
-        <button onclick="runBenchmark()">Run Worker CPU Benchmark</button>
-        <div id="metrics-result"></div>
-    </div>
-    <div>
-        <input type="text" id="username" placeholder="Enter your name..." />
-    </div>
-    <div id="chat"></div>
-    <div>
-        <input type="text" id="message" placeholder="Type a message here..." onkeypress="handleKeyPress(event)" />
-        <button onclick="sendMessage()">Send</button>
+    <div class="app-container">
+        <!-- Sidebar / Control Panel -->
+        <aside class="sidebar">
+            <header class="dashboard-header">
+                <h1>Distributed Chat</h1>
+                <div class="header-controls">
+                    <button id="theme-toggle" class="btn-icon-only" onclick="toggleTheme()" title="Toggle Light/Dark Theme">
+                        <!-- Moon Icon (Dark Mode Active) -->
+                        <svg class="theme-icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                        </svg>
+                        <!-- Sun Icon (Light Mode Active) -->
+                        <svg class="theme-icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                            <circle cx="12" cy="12" r="5"></circle>
+                            <line x1="12" y1="1" x2="12" y2="3"></line>
+                            <line x1="12" y1="21" x2="12" y2="23"></line>
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                            <line x1="1" y1="12" x2="3" y2="12"></line>
+                            <line x1="21" y1="12" x2="23" y2="12"></line>
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                        </svg>
+                    </button>
+                    <div class="connection-status" id="connection-status">
+                        <span class="status-dot disconnected" id="connection-dot"></span>
+                        <span class="status-text" id="connection-text">Disconnected</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- User Setup Card -->
+            <section class="panel user-panel">
+                <div class="panel-header">
+                    <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    <h2>User Identity</h2>
+                </div>
+                <div class="form-group">
+                    <label for="username">Display Name</label>
+                    <input type="text" id="username" placeholder="Anonymous" value="Anonymous" maxlength="20" />
+                </div>
+            </section>
+
+            <!-- Telemetry Metrics Panel -->
+            <section class="panel metrics-panel">
+                <div class="panel-header">
+                    <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="20" x2="18" y2="10"></line>
+                        <line x1="12" y1="20" x2="12" y2="4"></line>
+                        <line x1="6" y1="20" x2="6" y2="14"></line>
+                    </svg>
+                    <h2>Gateway Telemetry</h2>
+                </div>
+
+                <div class="metrics-grid">
+                    <!-- Active Clients -->
+                    <div class="metric-card" id="card-active-clients">
+                        <div class="metric-value" id="metric-active-clients">0</div>
+                        <div class="metric-label">Active Users</div>
+                    </div>
+                    <!-- Requests Processed -->
+                    <div class="metric-card" id="card-processed">
+                        <div class="metric-value" id="metric-processed">0</div>
+                        <div class="metric-label">Processed</div>
+                    </div>
+                    <!-- Avg Latency -->
+                    <div class="metric-card" id="card-latency">
+                        <div class="metric-value" id="metric-latency">0<span class="unit">ms</span></div>
+                        <div class="metric-label">Avg Latency</div>
+                    </div>
+                    <!-- Backpressure Drops -->
+                    <div class="metric-card warning" id="card-dropped">
+                        <div class="metric-value" id="metric-dropped">0</div>
+                        <div class="metric-label">Dropped (Backpressure)</div>
+                    </div>
+                    <!-- Failed Timeouts -->
+                    <div class="metric-card critical" id="card-failed">
+                        <div class="metric-value" id="metric-failed">0</div>
+                        <div class="metric-label">Timeout Failures</div>
+                    </div>
+                </div>
+
+                <div class="metrics-controls">
+                    <button class="btn btn-secondary" onclick="checkMetrics()">
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+                        </svg>
+                        Refresh Metrics
+                    </button>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="auto-refresh-toggle" onchange="toggleAutoRefresh(this)" />
+                        <span class="slider"></span>
+                        <span class="toggle-label">Auto-Poll (3s)</span>
+                    </label>
+                </div>
+            </section>
+
+            <!-- Worker CPU Benchmark Panel -->
+            <section class="panel benchmark-panel">
+                <div class="panel-header">
+                    <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="2" width="20" height="20" rx="2" ry="2"></rect>
+                        <rect x="6" y="6" width="12" height="12"></rect>
+                        <line x1="9" y1="1" x2="9" y2="6"></line>
+                        <line x1="15" y1="1" x2="15" y2="6"></line>
+                        <line x1="9" y1="18" x2="9" y2="23"></line>
+                        <line x1="15" y1="18" x2="15" y2="23"></line>
+                        <line x1="23" y1="9" x2="18" y2="9"></line>
+                        <line x1="23" y1="15" x2="18" y2="15"></line>
+                        <line x1="6" y1="9" x2="1" y2="9"></line>
+                        <line x1="6" y1="15" x2="1" y2="15"></line>
+                    </svg>
+                    <h2>CPU Benchmark</h2>
+                </div>
+
+                <div class="benchmark-info">
+                    <p class="desc">Compares execution time of parallel vs sequential pipelines over 5,000,000 floats on the Worker Service.</p>
+                    <button class="btn btn-primary btn-block" onclick="runBenchmark()">
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                        </svg>
+                        Run Stream Benchmark
+                    </button>
+                </div>
+
+                <div class="benchmark-results-container" id="benchmark-results" style="display: none;">
+                    <div class="speedup-badge-wrapper">
+                        <div class="speedup-value" id="bench-speedup">1.0x</div>
+                        <div class="speedup-label">Parallel Speedup Factor</div>
+                    </div>
+
+                    <div class="bar-chart-container">
+                        <!-- Sequential stream bar -->
+                        <div class="bar-wrapper">
+                            <div class="bar-label-group">
+                                <span class="bar-name">Sequential Stream</span>
+                                <span class="bar-time" id="bench-seq-time">0 ms</span>
+                            </div>
+                            <div class="bar-bg">
+                                <div class="bar-fill sequential" id="bench-seq-bar" style="width: 100%;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Parallel stream bar -->
+                        <div class="bar-wrapper">
+                            <div class="bar-label-group">
+                                <span class="bar-name">Parallel Stream</span>
+                                <span class="bar-time" id="bench-par-time">0 ms</span>
+                            </div>
+                            <div class="bar-bg">
+                                <div class="bar-fill parallel" id="bench-par-bar" style="width: 100%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Collapsible raw output for engineers -->
+                <details class="raw-metrics-details">
+                    <summary>Raw Telemetry JSON</summary>
+                    <pre id="metrics-result">No raw data fetched yet</pre>
+                </details>
+            </section>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="chat-section">
+            <header class="chat-header">
+                <div class="chat-title-group">
+                    <svg class="chat-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    <h2>Distributed Live Chat</h2>
+                </div>
+                <div class="chat-subtitle" id="chat-subtitle">
+                    Connecting to ws://localhost:8090/chat...
+                </div>
+            </header>
+
+            <!-- Chat message logs -->
+            <div id="chat" class="chat-messages-container">
+                <div class="system-message info-banner">
+                    <p>Welcome to the Distributed Live Chat System. Enter a display name on the left and start messaging.</p>
+                </div>
+            </div>
+
+            <!-- Message input footer -->
+            <footer class="chat-footer">
+                <div class="input-container">
+                    <input type="text" id="message" placeholder="Type a message to broadcast..." onkeypress="handleKeyPress(event)" autocomplete="off" />
+                    <button class="btn btn-primary btn-send" onclick="sendMessage()">
+                        <span>Send</span>
+                        <svg class="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </div>
+            </footer>
+        </main>
     </div>
 
     <script src="app.js"></script>

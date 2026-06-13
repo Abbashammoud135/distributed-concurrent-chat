@@ -1,6 +1,7 @@
 package com.chat.gateway.service;
 
 import jakarta.annotation.PreDestroy;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -24,8 +25,10 @@ public class GatewayService {
     // Bounded Resources: Explicit Thread Pool with Bounded Queue
     private final ExecutorService executor;
     private final HttpClient httpClient;
+    private final String workerUrl;
 
-    public GatewayService() {
+    public GatewayService(@Value("${worker.url:http://localhost:8091}") String workerUrl) {
+        this.workerUrl = workerUrl;
         // Core: 10, Max: 50, Queue: 100. Overload drops messages (Backpressure).
         this.executor = new ThreadPoolExecutor(
                 10, 50, 60L, TimeUnit.SECONDS,
@@ -56,7 +59,7 @@ public class GatewayService {
 
                 // Distributed Network Boundary: Call Worker Service
                 HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create("http://localhost:8081/process"))
+                        .uri(URI.create(workerUrl + "/process"))
                         .POST(HttpRequest.BodyPublishers.ofString(message))
                         .header("Content-Type", "text/plain")
                         .build();

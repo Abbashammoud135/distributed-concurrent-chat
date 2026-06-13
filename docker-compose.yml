@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  worker-service:
+    build:
+      context: ./worker-service
+      dockerfile: Dockerfile
+    container_name: worker-service
+    ports:
+      - "8091:8091"
+    networks:
+      - chat-network
+
+  gateway-service:
+    build:
+      context: ./gateway-service
+      dockerfile: Dockerfile
+    container_name: gateway-service
+    ports:
+      - "8090:8090"
+    environment:
+      - WORKER_URL=http://worker-service:8091
+    depends_on:
+      - worker-service
+    networks:
+      - chat-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend-service
+    ports:
+      - "8000:80"
+    depends_on:
+      - gateway-service
+    networks:
+      - chat-network
+
+networks:
+  chat-network:
+    driver: bridge
